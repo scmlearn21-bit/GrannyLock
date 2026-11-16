@@ -56,12 +56,12 @@ const GRANDMA_QUOTES = [
 ];
 
 const BREAK_ACTIVITIES = [
-  "Granny is taking a quick power nap. Stretch & hydrate! 💤",
-  "Granny is outside gardening her prize petunias. Relax! 🌻",
-  "Granny is sharpening her wooden spatula... enjoy the peace! 🪵",
-  "Granny is baking snickerdoodles. Take a breather! 🍪",
-  "Granny is knitting a sweater. Grab some water! 🧶",
-  "Granny is yelling at squirrels on the porch. Rest your brain! 🐿️",
+  "Granny is taking a quick power nap. Stretch & hydrate!",
+  "Granny is outside gardening her prize petunias. Relax!",
+  "Granny is sharpening her wooden spatula... enjoy the peace!",
+  "Granny is baking snickerdoodles. Take a breather!",
+  "Granny is knitting a sweater. Grab some water!",
+  "Granny is yelling at squirrels on the porch. Rest your brain!",
 ];
 
 const POPUP_POSITIONS = [
@@ -74,24 +74,24 @@ const POPUP_POSITIONS = [
 
 const TUTORIAL_STEPS = [
   {
-    emoji: '📓',
+    emoji: '👋',
     title: 'Welcome to GrannyLock!',
-    body: 'Your cartoon notebook study buddy. Build your study stack, lock in, and survive Granny’s watchful eye.',
+    body: 'Your cartoon notebook study buddy. Build your study stack, lock in, and survive Granny s watchful eye.',
   },
   {
-    emoji: '✏️',
+    emoji: '📚',
     title: '1. Build Your Stack',
     body: 'Use the Add tab to jot down tests, projects, or homework. Adjust minutes and rank them in the Stack tab!',
   },
   {
-    emoji: '👵',
+    emoji: '🍳',
     title: '2. Beware the Spatula',
     body: 'During focus timers, Granny will randomly pop out from the edges of your screen to keep you off your phone.',
   },
   {
     emoji: '🍪',
     title: '3. Earn Smart Breaks',
-    body: 'Finish a task and Granny takes a break to garden, nap, or bake—giving you time to stretch and recharge!',
+    body: 'Finish a task and Granny takes a break to garden, nap, or bake giving you time to stretch and recharge!',
   },
 ];
 
@@ -104,9 +104,6 @@ const TABS = [
 const GRANDMA_SCALE = 1.55;
 let hasSeenTutorialGlobal = false;
 
-// ==========================================
-// LINED NOTEBOOK PAPER BACKGROUND
-// ==========================================
 function NotebookBackground({ children, tintColor = '#FFFDF7' }) {
   const lineCount = Math.ceil(SCREEN_HEIGHT / 34);
   return (
@@ -125,9 +122,6 @@ function NotebookBackground({ children, tintColor = '#FFFDF7' }) {
   );
 }
 
-// ==========================================
-// BOUNCY FLOATING TEXT ANIMATION
-// ==========================================
 function BouncyTitle({ text, style }) {
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const tiltAnim = useRef(new Animated.Value(0)).current;
@@ -139,7 +133,6 @@ function BouncyTitle({ text, style }) {
       tension: 80,
       useNativeDriver: true,
     }).start();
-
     Animated.loop(
       Animated.sequence([
         Animated.timing(tiltAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -160,15 +153,11 @@ function BouncyTitle({ text, style }) {
   );
 }
 
-// ==========================================
-// FIXED MULTI-POSITION SPATULA GRANDMA
-// ==========================================
 function SpatulaGrandma({ visible, quote, positionConfig }) {
   const slideY = useRef(new Animated.Value(450)).current;
   const slideX = useRef(new Animated.Value(0)).current;
   const spatulaWiggle = useRef(new Animated.Value(0)).current;
   const bubbleScale = useRef(new Animated.Value(0.5)).current;
-
   const maxAllowedX = SCREEN_WIDTH * 0.28;
   const safeXOffset = positionConfig ? Math.max(-maxAllowedX, Math.min(maxAllowedX, positionConfig.xOffset)) : 0;
 
@@ -177,7 +166,6 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
       slideY.setValue(positionConfig.yStart);
       slideX.setValue(positionConfig.xStart);
       bubbleScale.setValue(0.4);
-
       Animated.parallel([
         Animated.spring(slideY, {
           toValue: 0,
@@ -199,7 +187,6 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
           useNativeDriver: true,
         }),
       ]).start();
-
       Animated.loop(
         Animated.sequence([
           Animated.timing(spatulaWiggle, { toValue: 1, duration: 180, useNativeDriver: true }),
@@ -247,10 +234,9 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
       ]}
     >
       <Animated.View style={[styles.speechBubble, { transform: [{ scale: bubbleScale }] }]}>
-        <Text style={styles.speechText}>“{quote}”</Text>
+        <Text style={styles.speechText}>{quote}</Text>
         <View style={styles.speechTail} />
       </Animated.View>
-
       <View
         style={[
           styles.grandmaContainer,
@@ -264,7 +250,6 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
       >
         <View style={styles.hairBun} />
         <View style={styles.hairBase} />
-
         <View style={styles.grandmaFace}>
           <View style={styles.browLeft} />
           <View style={styles.browRight} />
@@ -277,7 +262,6 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
           <View style={[styles.cheek, { left: 10 }]} />
           <View style={[styles.cheek, { right: 10 }]} />
         </View>
-
         <View style={styles.cardigan}>
           <View style={styles.pearlsRow}>
             <View style={styles.pearl} />
@@ -286,7 +270,6 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
             <View style={styles.pearl} />
           </View>
         </View>
-
         <Animated.View style={[styles.spatulaWrap, { transform: [{ rotate: rotateSpatula }] }]}>
           <View style={styles.spatulaHead}>
             <View style={styles.spatulaSlot} />
@@ -300,39 +283,31 @@ function SpatulaGrandma({ visible, quote, positionConfig }) {
   );
 }
 
-// ==========================================
-// MAIN APP
-// ==========================================
 export default function App() {
   const [showTutorial, setShowTutorial] = useState(!hasSeenTutorialGlobal);
   const [tutorialStep, setTutorialStep] = useState(0);
-
-  const [screen, setScreen] = useState('planner'); // 'planner' | 'timer' | 'done'
-  const [tab, setTab] = useState('add'); // 'add' | 'stack' | 'sync'
-
+  const [screen, setScreen] = useState('planner');
+  const [tab, setTab] = useState('add');
   const [titleInput, setTitleInput] = useState('');
   const [selectedCat, setSelectedCat] = useState('test');
   const [classroomLink, setClassroomLink] = useState('');
   const [linkSaved, setLinkSaved] = useState(false);
-
   const [tasks, setTasks] = useState([]);
-
   const [queue, setQueue] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-
   const [grandmaVisible, setGrandmaVisible] = useState(false);
   const [grandmaQuote, setGrandmaQuote] = useState(GRANDMA_QUOTES[0]);
   const [grandmaPos, setGrandmaPos] = useState(POPUP_POSITIONS[0]);
   const [breakActivity, setBreakActivity] = useState(BREAK_ACTIVITIES[0]);
-
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const tabBounceAnim = useRef(new Animated.Value(1)).current;
-
   const [soundOn, setSoundOn] = useState(true);
   const soundRef = useRef(true);
+
   useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
+
   const SOUND_BASE = 'https://raw.githubusercontent.com/scmlearn21-bit/GrannyLock/main/assets/';
   const appearPlayer = useAudioPlayer({ uri: SOUND_BASE + 'granny-appear.wav' });
   const tapPlayer = useAudioPlayer({ uri: SOUND_BASE + 'spatula-tap.wav' });
@@ -433,7 +408,6 @@ export default function App() {
     if (tasks.length === 0) return;
     triggerHaptic();
     playSound(tapPlayer);
-
     const builtQueue = [];
     tasks.forEach((task, idx) => {
       builtQueue.push({ type: 'focus', title: task.title, category: task.category, mins: task.mins });
@@ -449,7 +423,6 @@ export default function App() {
         });
       }
     });
-
     setQueue(builtQueue);
     setCurrentStepIndex(0);
     setSecondsLeft(builtQueue[0].mins * 60);
@@ -491,11 +464,9 @@ export default function App() {
     const quote = GRANDMA_QUOTES[Math.floor(Math.random() * GRANDMA_QUOTES.length)];
     const otherPositions = POPUP_POSITIONS.filter((p) => p.id !== grandmaPos.id);
     const nextPos = otherPositions[Math.floor(Math.random() * otherPositions.length)];
-
     setGrandmaQuote(quote);
     setGrandmaPos(nextPos);
     setGrandmaVisible(true);
-
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     if (soundRef.current) {
       playSound(appearPlayer);
@@ -506,15 +477,13 @@ export default function App() {
   const handleStepComplete = async () => {
     setGrandmaVisible(false);
     const nextIdx = currentStepIndex + 1;
-
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: nextIdx < queue.length ? 'Timer Up! Next Step Ready ✨' : 'All Done! Study Session Complete 🎉',
+        title: nextIdx < queue.length ? 'Timer Up! Next Step Ready' : 'All Done! Study Session Complete',
         body: nextIdx < queue.length ? `Up next: ${queue[nextIdx].title}` : 'Grandma is proud. Put the spatula away!',
       },
       trigger: null,
     });
-
     if (nextIdx < queue.length) {
       setCurrentStepIndex(nextIdx);
       setSecondsLeft(queue[nextIdx].mins * 60);
@@ -541,7 +510,6 @@ export default function App() {
   const renderTutorialModal = () => {
     const stepData = TUTORIAL_STEPS[tutorialStep];
     const isLast = tutorialStep === TUTORIAL_STEPS.length - 1;
-
     return (
       <Modal visible={showTutorial} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
@@ -550,7 +518,6 @@ export default function App() {
             <Text style={styles.tutorialEmoji}>{stepData.emoji}</Text>
             <Text style={styles.tutorialTitle}>{stepData.title}</Text>
             <Text style={styles.tutorialBody}>{stepData.body}</Text>
-
             <View style={styles.dotsRow}>
               {TUTORIAL_STEPS.map((_, i) => (
                 <View
@@ -562,7 +529,6 @@ export default function App() {
                 />
               ))}
             </View>
-
             <View style={styles.tutorialBtnRow}>
               {tutorialStep > 0 && (
                 <TouchableOpacity
@@ -575,7 +541,6 @@ export default function App() {
                   <Text style={styles.chunkyBtnText}>Back</Text>
                 </TouchableOpacity>
               )}
-
               <TouchableOpacity
                 style={[styles.chunkyBtn, { backgroundColor: isLast ? '#38B000' : '#FFD166', flex: 2 }]}
                 onPress={() => {
@@ -588,7 +553,7 @@ export default function App() {
                 }}
               >
                 <Text style={[styles.chunkyBtnText, { color: isLast ? '#FFF' : '#1E1B18' }]}>
-                  {isLast ? "Let's Lock In! 🚀" : 'Next →'}
+                  {isLast ? "Let's Lock In!" : 'Next'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -604,17 +569,14 @@ export default function App() {
         <SafeAreaView style={styles.safeArea}>
           <StatusBar barStyle="dark-content" />
           {renderTutorialModal()}
-
           <View style={styles.headerRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <BouncyTitle text="GrannyLock" style={styles.appTitle} />
-              <Text style={{ fontSize: 26 }}>👵</Text>
             </View>
             <View style={styles.stickerBadge}>
-              <Text style={styles.stickerText}>NOTEBOOK EDITION ✏️</Text>
+              <Text style={styles.stickerText}>NOTEBOOK EDITION</Text>
             </View>
           </View>
-
           <Animated.ScrollView
             style={{ transform: [{ scale: tabBounceAnim }] }}
             contentContainerStyle={styles.scrollContent}
@@ -624,7 +586,7 @@ export default function App() {
             {tab === 'add' && (
               <View style={styles.cartoonCard}>
                 <View style={styles.washiTape} />
-                <Text style={styles.cardHeading}>✏️ Jot down an assignment:</Text>
+                <Text style={styles.cardHeading}>Jot down an assignment:</Text>
                 <TextInput
                   style={styles.cartoonInput}
                   placeholder="e.g., AP Bio Quiz, English Essay..."
@@ -632,7 +594,6 @@ export default function App() {
                   value={titleInput}
                   onChangeText={setTitleInput}
                 />
-
                 <Text style={styles.subLabel}>Pick a sticker label:</Text>
                 <View style={styles.catGrid}>
                   {Object.values(CATEGORIES).map((cat) => {
@@ -658,32 +619,27 @@ export default function App() {
                     );
                   })}
                 </View>
-
                 <TouchableOpacity style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 4 }]} onPress={addTask}>
                   <Ionicons name="add-circle" size={22} color="#1E1B18" />
                   <Text style={styles.chunkyBtnText}>Stick Into My Stack!</Text>
                 </TouchableOpacity>
               </View>
             )}
-
             {tab === 'stack' && (
               <>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitle}>Your Study Stack 📌</Text>
+                  <Text style={styles.sectionTitle}>Your Study Stack</Text>
                   <Text style={styles.totalTimeBadge}>{totalFocusMins}m + breaks</Text>
                 </View>
-
                 {tasks.length === 0 && (
                   <View style={[styles.cartoonCard, { alignItems: 'center', paddingVertical: 28 }]}>
                     <View style={styles.washiTape} />
-                    <Text style={{ fontSize: 42 }}>📝</Text>
                     <Text style={[styles.cardHeading, { textAlign: 'center' }]}>Blank Page!</Text>
                     <Text style={[styles.helperText, { textAlign: 'center' }]}>
                       Your stack is empty. Tap the Add tab below to write down your first assignment!
                     </Text>
                   </View>
                 )}
-
                 {tasks.map((task, index) => {
                   const cat = CATEGORIES[task.category];
                   return (
@@ -708,7 +664,6 @@ export default function App() {
                           />
                         </TouchableOpacity>
                       </View>
-
                       <View style={{ flex: 1, gap: 6 }}>
                         <View style={styles.rowBetween}>
                           <View style={[styles.miniTag, { backgroundColor: cat.bgLight }]}>
@@ -720,9 +675,7 @@ export default function App() {
                             <Ionicons name="close-circle" size={22} color="#9E958C" />
                           </TouchableOpacity>
                         </View>
-
                         <Text style={styles.taskTitle}>{task.title}</Text>
-
                         <View style={styles.timeAdjustRow}>
                           <TouchableOpacity style={styles.timeStepBtn} onPress={() => adjustTaskMins(task.id, -5)}>
                             <Text style={styles.timeStepText}>-5m</Text>
@@ -739,7 +692,6 @@ export default function App() {
                     </View>
                   );
                 })}
-
                 {tasks.length > 0 && (
                   <TouchableOpacity
                     style={[styles.chunkyBtn, { backgroundColor: '#FF5A5F', marginTop: 8, paddingVertical: 16 }]}
@@ -753,11 +705,10 @@ export default function App() {
                 )}
               </>
             )}
-
             {tab === 'sync' && (
               <View style={styles.cartoonCard}>
                 <View style={styles.washiTape} />
-                <Text style={styles.cardHeading}>Google Classroom Sync 🏫</Text>
+                <Text style={styles.cardHeading}>Google Classroom Sync</Text>
                 <Text style={styles.helperText}>
                   Paste your Classroom calendar feed (.ics) link to import due dates.
                 </Text>
@@ -780,12 +731,11 @@ export default function App() {
                     setLinkSaved(true);
                   }}
                 >
-                  <Text style={styles.chunkyBtnText}>{linkSaved ? 'Saved ✓' : 'Save Sync Link'}</Text>
+                  <Text style={styles.chunkyBtnText}>{linkSaved ? 'Saved' : 'Save Sync Link'}</Text>
                 </TouchableOpacity>
               </View>
             )}
           </Animated.ScrollView>
-
           <View style={styles.tabBar}>
             {TABS.map((t) => {
               const active = tab === t.id;
@@ -821,7 +771,6 @@ export default function App() {
     const catTheme = isBreak
       ? { color: '#9B5DE5', bgLight: '#F3E8FF', label: 'CHILL BREAK' }
       : CATEGORIES[currentItem.category];
-
     return (
       <NotebookBackground tintColor={isBreak ? '#F7F0FF' : '#FFFDF7'}>
         <SafeAreaView style={styles.safeArea}>
@@ -840,7 +789,6 @@ export default function App() {
                 <Ionicons name="arrow-back" size={18} color="#1E1B18" />
                 <Text style={styles.smallExitText}>Edit List</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.smallExitBtn}
                 onPress={() => {
@@ -850,24 +798,20 @@ export default function App() {
               >
                 <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color="#1E1B18" />
               </TouchableOpacity>
-
               <View style={styles.stepPill}>
                 <Text style={styles.stepPillText}>
                   Step {currentStepIndex + 1} of {queue.length}
                 </Text>
               </View>
             </View>
-
             <View style={[styles.timerMainCard, { borderColor: '#1E1B18' }]}>
               <View style={styles.washiTape} />
               <View style={[styles.catBadgeLarge, { backgroundColor: catTheme.color }]}>
                 <Text style={styles.catBadgeLargeText}>{catTheme.label.toUpperCase()}</Text>
               </View>
-
               <Animated.Text style={[styles.activeTaskTitle, { transform: [{ scale: pulseAnim }] }]}>
                 {currentItem.title}
               </Animated.Text>
-
               <Animated.View
                 style={[
                   styles.clockBox,
@@ -876,13 +820,11 @@ export default function App() {
               >
                 <Text style={styles.clockDigits}>{formatClock(secondsLeft)}</Text>
               </Animated.View>
-
               <Text style={styles.modeSubtext}>
                 {isBreak
                   ? breakActivity
-                  : 'Stay locked in—Granny is patrolling with her spatula... 👀'}
+                  : 'Stay locked in! Granny is patrolling with her spatula...'}
               </Text>
-
               <View style={styles.timerControlsRow}>
                 <TouchableOpacity
                   style={[styles.chunkyBtn, { flex: 1, backgroundColor: isRunning ? '#FFD166' : '#38B000' }]}
@@ -894,7 +836,6 @@ export default function App() {
                   <Ionicons name={isRunning ? 'pause' : 'play'} size={20} color="#1E1B18" />
                   <Text style={styles.chunkyBtnText}>{isRunning ? 'Pause' : 'Resume'}</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[styles.chunkyBtn, { backgroundColor: '#E0E0E0', paddingHorizontal: 16 }]}
                   onPress={handleStepComplete}
@@ -902,14 +843,12 @@ export default function App() {
                   <Ionicons name="play-skip-forward" size={20} color="#1E1B18" />
                 </TouchableOpacity>
               </View>
-
               {!isBreak && (
                 <TouchableOpacity style={styles.peekTriggerBtn} onPress={summonGrandma}>
-                  <Text style={styles.peekTriggerText}>👀 Summon Granny Now</Text>
+                  <Text style={styles.peekTriggerText}>Summon Granny Now</Text>
                 </TouchableOpacity>
               )}
             </View>
-
             {currentStepIndex + 1 < queue.length && (
               <View style={styles.upNextBox}>
                 <Text style={styles.upNextLabel}>UP NEXT:</Text>
@@ -919,7 +858,6 @@ export default function App() {
               </View>
             )}
           </View>
-
           <SpatulaGrandma
             visible={grandmaVisible && !isBreak}
             quote={grandmaQuote}
@@ -936,7 +874,6 @@ export default function App() {
         <View style={styles.doneWrap}>
           <View style={styles.cartoonCard}>
             <View style={styles.washiTape} />
-            <Text style={{ fontSize: 60, textAlign: 'center' }}>🎉👵✨</Text>
             <BouncyTitle text="You Survived!" style={[styles.appTitle, { textAlign: 'center', marginTop: 4 }]} />
             <Text style={[styles.helperText, { textAlign: 'center', fontSize: 16 }]}>
               Every assignment in your study stack is finished! Granny put the spatula back in the kitchen drawer.
@@ -949,7 +886,7 @@ export default function App() {
                 setTab('add');
               }}
             >
-              <Text style={styles.chunkyBtnText}>Start a Fresh Page 📓</Text>
+              <Text style={styles.chunkyBtnText}>Start a Fresh Page</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1011,7 +948,6 @@ const styles = StyleSheet.create({
   },
   stickerText: { fontFamily: PLAYFUL_FONT, fontSize: 11, fontWeight: '900', color: '#1E1B18', letterSpacing: 0.6 },
   appTitle: { fontFamily: PLAYFUL_FONT, fontSize: 33, fontWeight: '900', color: '#1E1B18', letterSpacing: -0.5 },
-
   washiTape: {
     position: 'absolute',
     top: -12,
@@ -1024,7 +960,6 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-2deg' }],
     zIndex: 10,
   },
-
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(30, 27, 24, 0.6)',
@@ -1053,7 +988,6 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: 'row', gap: 6, marginVertical: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D6CFC4' },
   tutorialBtnRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
-
   tabBar: {
     flexDirection: 'row',
     gap: 10,
@@ -1096,7 +1030,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   tabBadgeText: { fontFamily: PLAYFUL_FONT, fontSize: 11, fontWeight: '900', color: '#FFF' },
-
   cartoonCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
@@ -1216,7 +1149,6 @@ const styles = StyleSheet.create({
     borderColor: '#1E1B18',
   },
   timeReadoutText: { fontFamily: PLAYFUL_FONT, fontSize: 13, fontWeight: '900', color: '#1E1B18' },
-
   timerScreenWrap: { flex: 1, padding: 20, paddingLeft: 44, justifyContent: 'space-between' },
   smallExitBtn: {
     flexDirection: 'row',
@@ -1296,7 +1228,6 @@ const styles = StyleSheet.create({
   upNextLabel: { fontFamily: PLAYFUL_FONT, fontSize: 12, fontWeight: '900', color: '#8D847A' },
   upNextTitle: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '800', color: '#1E1B18', flex: 1 },
   doneWrap: { flex: 1, justifyContent: 'center', padding: 24, paddingLeft: 44 },
-
   grandmaOverlay: {
     position: 'absolute',
     bottom: -10,
