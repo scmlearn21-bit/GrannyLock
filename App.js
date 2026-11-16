@@ -11,11 +11,15 @@ import {
   Easing,
   StatusBar,
   Platform,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -23,6 +27,13 @@ Notifications.setNotificationHandler({
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
+});
+
+// Built-in playful font that works out-of-the-box on iOS, Android, and Web without extra installs
+const PLAYFUL_FONT = Platform.select({
+  ios: 'Chalkboard SE',
+  android: 'casual',
+  default: 'Comic Sans MS',
 });
 
 const CATEGORIES = {
@@ -38,6 +49,51 @@ const GRANDMA_QUOTES = [
   "That test won't pass itself, sweetie.",
   "Eyes on your notes. Don't test me.",
   "One more TikTok and the spatula comes out.",
+  "I'm watching you through the bifocals...",
+  "Do you want an A or do you want the spatula?",
+  "Less scrolling, more studying!",
+  "My knees hurt just watching you procrastinate.",
+  "Lock in before I lock your phone in the cookie jar!",
+];
+
+const BREAK_ACTIVITIES = [
+  "Granny is taking a quick power nap. Stretch & hydrate! 💤",
+  "Granny is outside gardening her prize petunias. Relax! 🌻",
+  "Granny is sharpening her wooden spatula... enjoy the peace! 🪵",
+  "Granny is baking snickerdoodles. Take a breather! 🍪",
+  "Granny is knitting a sweater. Grab some water! 🧶",
+  "Granny is yelling at squirrels on the porch. Rest your brain! 🐿️",
+];
+
+const POPUP_POSITIONS = [
+  { id: 'bottom', rotation: '0deg', xOffset: 0, yStart: 450, xStart: 0, edge: 'bottom' },
+  { id: 'bottom-left', rotation: '24deg', xOffset: -SCREEN_WIDTH * 0.24, yStart: 450, xStart: -150, edge: 'bottom' },
+  { id: 'bottom-right', rotation: '-24deg', xOffset: SCREEN_WIDTH * 0.24, yStart: 450, xStart: 150, edge: 'bottom' },
+  { id: 'left-peek', rotation: '55deg', xOffset: -SCREEN_WIDTH * 0.4, yStart: 0, xStart: -300, edge: 'side' },
+  { id: 'right-peek', rotation: '-55deg', xOffset: SCREEN_WIDTH * 0.4, yStart: 0, xStart: 300, edge: 'side' },
+];
+
+const TUTORIAL_STEPS = [
+  {
+    emoji: '📓',
+    title: 'Welcome to GrannyLock!',
+    body: 'Your cartoon notebook study buddy. Build your study stack, lock in, and survive Granny’s watchful eye.',
+  },
+  {
+    emoji: '✏️',
+    title: '1. Build Your Stack',
+    body: 'Use the Add tab to jot down tests, projects, or homework. Adjust minutes and rank them in the Stack tab!',
+  },
+  {
+    emoji: '👵',
+    title: '2. Beware the Spatula',
+    body: 'During focus timers, Granny will randomly pop out from the edges of your screen to keep you off your phone.',
+  },
+  {
+    emoji: '🍪',
+    title: '3. Earn Smart Breaks',
+    body: 'Finish a task and Granny takes a break to garden, nap, or bake—giving you time to stretch and recharge!',
+  },
 ];
 
 const TABS = [
@@ -46,49 +102,166 @@ const TABS = [
   { id: 'sync', label: 'Sync', icon: 'school' },
 ];
 
-// How big Granny is. Bump this up/down to taste.
-const GRANDMA_SCALE = 1.9;
+const GRANDMA_SCALE = 1.65;
 
-function SpatulaGrandma({ visible, quote }) {
-  const slideAnim = useRef(new Animated.Value(600)).current;
-  const spatulaWiggle = useRef(new Animated.Value(0)).current;
+// Tracks first launch across reloads/remounts without requiring external storage libraries
+let hasSeenTutorialGlobal = false;
+
+// ==========================================
+// LINED NOTEBOOK PAPER BACKGROUND
+// ==========================================
+function NotebookBackground({ children, tintColor = '#FFFDF7' }) {
+  const lineCount = Math.ceil(SCREEN_HEIGHT / 34);
+  return (
+    <View style={[styles.notebookBase, { backgroundColor: tintColor }]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {Array.from({ length: lineCount }).map((_, idx) => (
+          <View key={idx} style={[styles.notebookLine, { top: 75 + idx * 34 }]} />
+        ))}
+        <View style={styles.marginLine} />
+        <View style={[styles.binderHole, { top: '18%' }]} />
+        <View style={[styles.binderHole, { top: '50%' }]} />
+        <View style={[styles.binderHole, { top: '82%' }]} />
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// ==========================================
+// BOUNCY FLOATING TEXT ANIMATION
+// ==========================================
+function BouncyTitle({ text, style }) {
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const tiltAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (visible) {
-      Animated.spring(slideAnim, { toValue: 0, friction: 6, tension: 60, useNativeDriver: true }).start();
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(tiltAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(tiltAnim, { toValue: -1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const rotate = tiltAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-2.5deg', '2.5deg'],
+  });
+
+  return (
+    <Animated.Text style={[style, { transform: [{ scale: scaleAnim }, { rotate }] }]}>
+      {text}
+    </Animated.Text>
+  );
+}
+
+// ==========================================
+// MULTI-POSITION SPATULA GRANDMA
+// ==========================================
+function SpatulaGrandma({ visible, quote, positionConfig }) {
+  const slideY = useRef(new Animated.Value(450)).current;
+  const slideX = useRef(new Animated.Value(0)).current;
+  const spatulaWiggle = useRef(new Animated.Value(0)).current;
+  const bubbleScale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    if (visible && positionConfig) {
+      slideY.setValue(positionConfig.yStart);
+      slideX.setValue(positionConfig.xStart);
+      bubbleScale.setValue(0.4);
+
+      Animated.parallel([
+        Animated.spring(slideY, {
+          toValue: 0,
+          friction: 5,
+          tension: 65,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideX, {
+          toValue: positionConfig.xOffset,
+          friction: 5,
+          tension: 65,
+          useNativeDriver: true,
+        }),
+        Animated.spring(bubbleScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 90,
+          delay: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
       Animated.loop(
         Animated.sequence([
-          Animated.timing(spatulaWiggle, { toValue: 1, duration: 250, useNativeDriver: true }),
-          Animated.timing(spatulaWiggle, { toValue: -1, duration: 250, useNativeDriver: true }),
-          Animated.timing(spatulaWiggle, { toValue: 0, duration: 250, useNativeDriver: true }),
+          Animated.timing(spatulaWiggle, { toValue: 1, duration: 180, useNativeDriver: true }),
+          Animated.timing(spatulaWiggle, { toValue: -1, duration: 180, useNativeDriver: true }),
+          Animated.timing(spatulaWiggle, { toValue: 0, duration: 180, useNativeDriver: true }),
         ])
       ).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: 600,
-        duration: 300,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }).start();
+    } else if (positionConfig) {
+      Animated.parallel([
+        Animated.timing(slideY, {
+          toValue: positionConfig.yStart,
+          duration: 280,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideX, {
+          toValue: positionConfig.xStart,
+          duration: 280,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
-  }, [visible]);
+  }, [visible, positionConfig]);
 
   const rotateSpatula = spatulaWiggle.interpolate({
     inputRange: [-1, 1],
-    outputRange: ['-14deg', '14deg'],
+    outputRange: ['-18deg', '18deg'],
   });
+
+  const isSide = positionConfig?.edge === 'side';
 
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.grandmaOverlay, { transform: [{ translateY: slideAnim }] }]}
+      style={[
+        styles.grandmaOverlay,
+        isSide && { bottom: SCREEN_HEIGHT * 0.28 },
+        {
+          transform: [
+            { translateX: slideX },
+            { translateY: slideY },
+          ],
+        },
+      ]}
     >
-      <View style={styles.speechBubble}>
+      <Animated.View style={[styles.speechBubble, { transform: [{ scale: bubbleScale }] }]}>
         <Text style={styles.speechText}>“{quote}”</Text>
         <View style={styles.speechTail} />
-      </View>
+      </Animated.View>
 
-      <View style={[styles.grandmaContainer, { transform: [{ scale: GRANDMA_SCALE }] }]}>
+      <View
+        style={[
+          styles.grandmaContainer,
+          {
+            transform: [
+              { rotate: positionConfig?.rotation || '0deg' },
+              { scale: GRANDMA_SCALE },
+            ],
+          },
+        ]}
+      >
         <View style={styles.hairBun} />
         <View style={styles.hairBase} />
 
@@ -127,7 +300,13 @@ function SpatulaGrandma({ visible, quote }) {
   );
 }
 
+// ==========================================
+// MAIN APP
+// ==========================================
 export default function App() {
+  const [showTutorial, setShowTutorial] = useState(!hasSeenTutorialGlobal);
+  const [tutorialStep, setTutorialStep] = useState(0);
+
   const [screen, setScreen] = useState('planner'); // 'planner' | 'timer' | 'done'
   const [tab, setTab] = useState('add'); // 'add' | 'stack' | 'sync'
 
@@ -136,11 +315,8 @@ export default function App() {
   const [classroomLink, setClassroomLink] = useState('');
   const [linkSaved, setLinkSaved] = useState(false);
 
-  const [tasks, setTasks] = useState([
-    { id: '1', title: 'AP Bio Chapter 8 Exam', category: 'test', mins: 60 },
-    { id: '2', title: 'History Diorama Slides', category: 'project', mins: 45 },
-    { id: '3', title: 'Algebra Worksheet #14', category: 'homework', mins: 30 },
-  ]);
+  // Empty stack on launch—no automatic assignments!
+  const [tasks, setTasks] = useState([]);
 
   const [queue, setQueue] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -149,20 +325,64 @@ export default function App() {
 
   const [grandmaVisible, setGrandmaVisible] = useState(false);
   const [grandmaQuote, setGrandmaQuote] = useState(GRANDMA_QUOTES[0]);
+  const [grandmaPos, setGrandmaPos] = useState(POPUP_POSITIONS[0]);
+  const [breakActivity, setBreakActivity] = useState(BREAK_ACTIVITIES[0]);
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const tabBounceAnim = useRef(new Animated.Value(1)).current;
 
   // Sound
   const [soundOn, setSoundOn] = useState(true);
-  const soundRef = useRef(true); // timers read this so mute works instantly
+  const soundRef = useRef(true);
   useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
-  // Sounds load from your public GitHub repo, so no local audio files are needed in Snack
   const SOUND_BASE = 'https://raw.githubusercontent.com/scmlearn21-bit/GrannyLock/main/assets/';
   const appearPlayer = useAudioPlayer({ uri: SOUND_BASE + 'granny-appear.wav' });
   const tapPlayer = useAudioPlayer({ uri: SOUND_BASE + 'spatula-tap.wav' });
 
   useEffect(() => {
-    // lets sounds play even when the iPhone silent switch is on
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+    // Also persist on web localStorage if running in browser/Snack web preview
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      if (window.localStorage.getItem('grannylock_tutorial_seen') === 'true') {
+        hasSeenTutorialGlobal = true;
+        setShowTutorial(false);
+      }
+    }
   }, []);
+
+  const finishTutorial = () => {
+    triggerHaptic();
+    hasSeenTutorialGlobal = true;
+    setShowTutorial(false);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('grannylock_tutorial_seen', 'true');
+    }
+  };
+
+  useEffect(() => {
+    if (screen === 'timer' && isRunning) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.045, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [screen, isRunning]);
+
+  const triggerTabBounce = () => {
+    tabBounceAnim.setValue(0.95);
+    Animated.spring(tabBounceAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const playSound = (player) => {
     if (!soundRef.current) return;
@@ -179,12 +399,15 @@ export default function App() {
   const addTask = () => {
     if (!titleInput.trim()) return;
     triggerHaptic();
+    playSound(tapPlayer);
     const catObj = CATEGORIES[selectedCat];
     setTasks([
       ...tasks,
       { id: Date.now().toString(), title: titleInput.trim(), category: selectedCat, mins: catObj.defaultMins },
     ]);
     setTitleInput('');
+    setTab('stack');
+    triggerTabBounce();
   };
 
   const adjustTaskMins = (id, delta) => {
@@ -219,11 +442,13 @@ export default function App() {
       builtQueue.push({ type: 'focus', title: task.title, category: task.category, mins: task.mins });
       if (idx < tasks.length - 1) {
         const smartBreakMins = task.mins >= 60 ? 15 : task.mins >= 45 ? 10 : 5;
+        const randomBreakMsg = BREAK_ACTIVITIES[Math.floor(Math.random() * BREAK_ACTIVITIES.length)];
         builtQueue.push({
           type: 'break',
           title: smartBreakMins >= 15 ? 'Long Brain Recharge' : 'Quick Stretch & Snack',
           category: 'break',
           mins: smartBreakMins,
+          activityText: randomBreakMsg,
         });
       }
     });
@@ -231,6 +456,7 @@ export default function App() {
     setQueue(builtQueue);
     setCurrentStepIndex(0);
     setSecondsLeft(builtQueue[0].mins * 60);
+    setBreakActivity(BREAK_ACTIVITIES[Math.floor(Math.random() * BREAK_ACTIVITIES.length)]);
     setIsRunning(true);
     setGrandmaVisible(false);
     setScreen('timer');
@@ -257,7 +483,7 @@ export default function App() {
       return;
     }
     const initialPeek = setTimeout(() => summonGrandma(), 4500);
-    const periodicInterval = setInterval(() => summonGrandma(), 28000);
+    const periodicInterval = setInterval(() => summonGrandma(), 24000);
     return () => {
       clearTimeout(initialPeek);
       clearInterval(periodicInterval);
@@ -266,8 +492,13 @@ export default function App() {
 
   const summonGrandma = () => {
     const quote = GRANDMA_QUOTES[Math.floor(Math.random() * GRANDMA_QUOTES.length)];
+    const otherPositions = POPUP_POSITIONS.filter((p) => p.id !== grandmaPos.id);
+    const nextPos = otherPositions[Math.floor(Math.random() * otherPositions.length)];
+
     setGrandmaQuote(quote);
+    setGrandmaPos(nextPos);
     setGrandmaVisible(true);
+
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     if (soundRef.current) {
       playSound(appearPlayer);
@@ -290,6 +521,12 @@ export default function App() {
     if (nextIdx < queue.length) {
       setCurrentStepIndex(nextIdx);
       setSecondsLeft(queue[nextIdx].mins * 60);
+      if (queue[nextIdx].type === 'break') {
+        setBreakActivity(
+          queue[nextIdx].activityText ||
+            BREAK_ACTIVITIES[Math.floor(Math.random() * BREAK_ACTIVITIES.length)]
+        );
+      }
     } else {
       setIsRunning(false);
       setScreen('done');
@@ -305,207 +542,290 @@ export default function App() {
   const totalFocusMins = tasks.reduce((acc, t) => acc + t.mins, 0);
 
   // ==========================================
+  // FIRST-TIME TUTORIAL MODAL
+  // ==========================================
+  const renderTutorialModal = () => {
+    const stepData = TUTORIAL_STEPS[tutorialStep];
+    const isLast = tutorialStep === TUTORIAL_STEPS.length - 1;
+
+    return (
+      <Modal visible={showTutorial} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.tutorialCard}>
+            <View style={styles.washiTape} />
+            <Text style={styles.tutorialEmoji}>{stepData.emoji}</Text>
+            <Text style={styles.tutorialTitle}>{stepData.title}</Text>
+            <Text style={styles.tutorialBody}>{stepData.body}</Text>
+
+            <View style={styles.dotsRow}>
+              {TUTORIAL_STEPS.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    i === tutorialStep && { backgroundColor: '#FF5A5F', width: 20 },
+                  ]}
+                />
+              ))}
+            </View>
+
+            <View style={styles.tutorialBtnRow}>
+              {tutorialStep > 0 && (
+                <TouchableOpacity
+                  style={[styles.chunkyBtn, { backgroundColor: '#FAF6EC', flex: 1 }]}
+                  onPress={() => {
+                    triggerHaptic();
+                    setTutorialStep(tutorialStep - 1);
+                  }}
+                >
+                  <Text style={styles.chunkyBtnText}>Back</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.chunkyBtn, { backgroundColor: isLast ? '#38B000' : '#FFD166', flex: 2 }]}
+                onPress={() => {
+                  if (isLast) {
+                    finishTutorial();
+                  } else {
+                    triggerHaptic();
+                    setTutorialStep(tutorialStep + 1);
+                  }
+                }}
+              >
+                <Text style={[styles.chunkyBtnText, { color: isLast ? '#FFF' : '#1E1B18' }]}>
+                  {isLast ? "Let's Lock In! 🚀" : 'Next →'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // ==========================================
   // SCREEN 1: PLANNER (3 TABS)
   // ==========================================
   if (screen === 'planner') {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" />
+      <NotebookBackground>
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar barStyle="dark-content" />
+          {renderTutorialModal()}
 
-        {/* Slim header */}
-        <View style={styles.headerRow}>
-          <Text style={styles.appTitle}>GrannyLock</Text>
-          <View style={styles.stickerBadge}>
-            <Text style={styles.stickerText}>STUDYCORE ✏️</Text>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <BouncyTitle text="GrannyLock" style={styles.appTitle} />
+              <Text style={{ fontSize: 26 }}>👵</Text>
+            </View>
+            <View style={styles.stickerBadge}>
+              <Text style={styles.stickerText}>NOTEBOOK EDITION ✏️</Text>
+            </View>
           </View>
-        </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* ---------- ADD TAB ---------- */}
-          {tab === 'add' && (
-            <View style={styles.cartoonCard}>
-              <Text style={styles.cardHeading}>What do you need to do?</Text>
-              <TextInput
-                style={styles.cartoonInput}
-                placeholder="e.g., Chem Quiz, English Essay..."
-                placeholderTextColor="#8D847A"
-                value={titleInput}
-                onChangeText={setTitleInput}
-              />
+          <Animated.ScrollView
+            style={{ transform: [{ scale: tabBounceAnim }] }}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* ---------- ADD TAB ---------- */}
+            {tab === 'add' && (
+              <View style={styles.cartoonCard}>
+                <View style={styles.washiTape} />
+                <Text style={styles.cardHeading}>✏️ Jot down an assignment:</Text>
+                <TextInput
+                  style={styles.cartoonInput}
+                  placeholder="e.g., AP Bio Quiz, English Essay..."
+                  placeholderTextColor="#8D847A"
+                  value={titleInput}
+                  onChangeText={setTitleInput}
+                />
 
-              <View style={styles.catGrid}>
-                {Object.values(CATEGORIES).map((cat) => {
-                  const active = selectedCat === cat.id;
-                  return (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={[
-                        styles.catPill,
-                        { backgroundColor: active ? cat.color : cat.bgLight },
-                        active && styles.catPillActive,
-                      ]}
-                      onPress={() => {
-                        triggerHaptic();
-                        setSelectedCat(cat.id);
-                      }}
-                    >
-                      <Ionicons name={cat.icon} size={15} color={active ? '#FFF' : '#1E1B18'} />
-                      <Text style={[styles.catPillText, active && { color: '#FFF' }]}>
-                        {cat.label} ({cat.defaultMins}m)
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity style={[styles.chunkyBtn, { backgroundColor: '#FFD166' }]} onPress={addTask}>
-                <Ionicons name="add-circle" size={20} color="#1E1B18" />
-                <Text style={styles.chunkyBtnText}>Add To Stack</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ---------- STACK TAB ---------- */}
-          {tab === 'stack' && (
-            <>
-              <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>Your Stack</Text>
-                <Text style={styles.totalTimeBadge}>{totalFocusMins}m + breaks</Text>
-              </View>
-
-              {tasks.length === 0 && (
-                <View style={styles.cartoonCard}>
-                  <Text style={styles.helperText}>Nothing here yet. Head to the Add tab to get started.</Text>
-                </View>
-              )}
-
-              {tasks.map((task, index) => {
-                const cat = CATEGORIES[task.category];
-                return (
-                  <View
-                    key={task.id}
-                    style={[styles.taskCard, { borderLeftWidth: 10, borderLeftColor: cat.color }]}
-                  >
-                    <View style={styles.rankCol}>
-                      <TouchableOpacity style={styles.arrowBtn} onPress={() => moveTask(index, -1)} disabled={index === 0}>
-                        <Ionicons name="caret-up" size={18} color={index === 0 ? '#CCC' : '#1E1B18'} />
-                      </TouchableOpacity>
-                      <Text style={styles.rankNumber}>#{index + 1}</Text>
+                <Text style={styles.subLabel}>Pick a sticker label:</Text>
+                <View style={styles.catGrid}>
+                  {Object.values(CATEGORIES).map((cat) => {
+                    const active = selectedCat === cat.id;
+                    return (
                       <TouchableOpacity
-                        style={styles.arrowBtn}
-                        onPress={() => moveTask(index, 1)}
-                        disabled={index === tasks.length - 1}
+                        key={cat.id}
+                        style={[
+                          styles.catPill,
+                          { backgroundColor: active ? cat.color : cat.bgLight },
+                          active && styles.catPillActive,
+                        ]}
+                        onPress={() => {
+                          triggerHaptic();
+                          setSelectedCat(cat.id);
+                        }}
                       >
-                        <Ionicons
-                          name="caret-down"
-                          size={18}
-                          color={index === tasks.length - 1 ? '#CCC' : '#1E1B18'}
-                        />
+                        <Ionicons name={cat.icon} size={16} color={active ? '#FFF' : '#1E1B18'} />
+                        <Text style={[styles.catPillText, active && { color: '#FFF' }]}>
+                          {cat.label} ({cat.defaultMins}m)
+                        </Text>
                       </TouchableOpacity>
-                    </View>
+                    );
+                  })}
+                </View>
 
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <View style={styles.rowBetween}>
-                        <View style={[styles.miniTag, { backgroundColor: cat.bgLight }]}>
-                          <Text style={[styles.miniTagText, { color: cat.color }]}>{cat.label.toUpperCase()}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => deleteTask(task.id)}>
-                          <Ionicons name="close-circle" size={20} color="#9E958C" />
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.taskTitle}>{task.title}</Text>
-
-                      <View style={styles.timeAdjustRow}>
-                        <TouchableOpacity style={styles.timeStepBtn} onPress={() => adjustTaskMins(task.id, -5)}>
-                          <Text style={styles.timeStepText}>-5m</Text>
-                        </TouchableOpacity>
-                        <View style={styles.timeReadout}>
-                          <Ionicons name="time-outline" size={14} color="#1E1B18" />
-                          <Text style={styles.timeReadoutText}>{task.mins} mins</Text>
-                        </View>
-                        <TouchableOpacity style={styles.timeStepBtn} onPress={() => adjustTaskMins(task.id, 5)}>
-                          <Text style={styles.timeStepText}>+5m</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-
-              {tasks.length > 0 && (
-                <TouchableOpacity
-                  style={[styles.chunkyBtn, { backgroundColor: '#FF5A5F', marginTop: 8, paddingVertical: 18 }]}
-                  onPress={startStudySession}
-                >
-                  <Ionicons name="flame" size={22} color="#FFF" />
-                  <Text style={[styles.chunkyBtnText, { color: '#FFF', fontSize: 18 }]}>Start Pomodoro Queue!</Text>
+                <TouchableOpacity style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 4 }]} onPress={addTask}>
+                  <Ionicons name="add-circle" size={22} color="#1E1B18" />
+                  <Text style={styles.chunkyBtnText}>Stick Into My Stack!</Text>
                 </TouchableOpacity>
-              )}
-            </>
-          )}
+              </View>
+            )}
 
-          {/* ---------- SYNC TAB ---------- */}
-          {tab === 'sync' && (
-            <View style={styles.cartoonCard}>
-              <Text style={styles.cardHeading}>Google Classroom Sync</Text>
-              <Text style={styles.helperText}>
-                Paste your Classroom calendar feed (.ics) link to import due dates.
-              </Text>
-              <TextInput
-                style={styles.cartoonInput}
-                placeholder="https://calendar.google.com/calendar/ical/..."
-                placeholderTextColor="#8D847A"
-                value={classroomLink}
-                onChangeText={(t) => {
-                  setClassroomLink(t);
-                  setLinkSaved(false);
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={[styles.chunkyBtn, { backgroundColor: '#A8DADC' }]}
-                onPress={() => {
-                  triggerHaptic();
-                  setLinkSaved(true);
-                }}
-              >
-                <Text style={styles.chunkyBtnText}>{linkSaved ? 'Saved ✓' : 'Save Sync Link'}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </ScrollView>
+            {/* ---------- STACK TAB ---------- */}
+            {tab === 'stack' && (
+              <>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionTitle}>Your Study Stack 📌</Text>
+                  <Text style={styles.totalTimeBadge}>{totalFocusMins}m + breaks</Text>
+                </View>
 
-        {/* Bottom tab bar */}
-        <View style={styles.tabBar}>
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <TouchableOpacity
-                key={t.id}
-                style={[styles.tabBtn, active && styles.tabBtnActive]}
-                onPress={() => {
-                  triggerHaptic();
-                  setTab(t.id);
-                }}
-              >
-                <Ionicons name={t.icon} size={20} color="#1E1B18" />
-                <Text style={styles.tabLabel}>{t.label}</Text>
-                {t.id === 'stack' && tasks.length > 0 && (
-                  <View style={styles.tabBadge}>
-                    <Text style={styles.tabBadgeText}>{tasks.length}</Text>
+                {tasks.length === 0 && (
+                  <View style={[styles.cartoonCard, { alignItems: 'center', paddingVertical: 28 }]}>
+                    <View style={styles.washiTape} />
+                    <Text style={{ fontSize: 42 }}>📝</Text>
+                    <Text style={[styles.cardHeading, { textAlign: 'center' }]}>Blank Page!</Text>
+                    <Text style={[styles.helperText, { textAlign: 'center' }]}>
+                      Your stack is empty. Tap the Add tab below to write down your first assignment!
+                    </Text>
                   </View>
                 )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
+
+                {tasks.map((task, index) => {
+                  const cat = CATEGORIES[task.category];
+                  return (
+                    <View
+                      key={task.id}
+                      style={[styles.taskCard, { borderLeftWidth: 10, borderLeftColor: cat.color }]}
+                    >
+                      <View style={styles.rankCol}>
+                        <TouchableOpacity style={styles.arrowBtn} onPress={() => moveTask(index, -1)} disabled={index === 0}>
+                          <Ionicons name="caret-up" size={20} color={index === 0 ? '#CCC' : '#1E1B18'} />
+                        </TouchableOpacity>
+                        <Text style={styles.rankNumber}>#{index + 1}</Text>
+                        <TouchableOpacity
+                          style={styles.arrowBtn}
+                          onPress={() => moveTask(index, 1)}
+                          disabled={index === tasks.length - 1}
+                        >
+                          <Ionicons
+                            name="caret-down"
+                            size={20}
+                            color={index === tasks.length - 1 ? '#CCC' : '#1E1B18'}
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <View style={styles.rowBetween}>
+                          <View style={[styles.miniTag, { backgroundColor: cat.bgLight }]}>
+                            <Text style={[styles.miniTagText, { color: cat.color }]}>
+                              {cat.label.toUpperCase()}
+                            </Text>
+                          </View>
+                          <TouchableOpacity onPress={() => deleteTask(task.id)}>
+                            <Ionicons name="close-circle" size={22} color="#9E958C" />
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.taskTitle}>{task.title}</Text>
+
+                        <View style={styles.timeAdjustRow}>
+                          <TouchableOpacity style={styles.timeStepBtn} onPress={() => adjustTaskMins(task.id, -5)}>
+                            <Text style={styles.timeStepText}>-5m</Text>
+                          </TouchableOpacity>
+                          <View style={styles.timeReadout}>
+                            <Ionicons name="time-outline" size={15} color="#1E1B18" />
+                            <Text style={styles.timeReadoutText}>{task.mins} mins</Text>
+                          </View>
+                          <TouchableOpacity style={styles.timeStepBtn} onPress={() => adjustTaskMins(task.id, 5)}>
+                            <Text style={styles.timeStepText}>+5m</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {tasks.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.chunkyBtn, { backgroundColor: '#FF5A5F', marginTop: 8, paddingVertical: 16 }]}
+                    onPress={startStudySession}
+                  >
+                    <Ionicons name="flame" size={24} color="#FFF" />
+                    <Text style={[styles.chunkyBtnText, { color: '#FFF', fontSize: 19 }]}>
+                      Start Pomodoro Queue!
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+
+            {/* ---------- SYNC TAB ---------- */}
+            {tab === 'sync' && (
+              <View style={styles.cartoonCard}>
+                <View style={styles.washiTape} />
+                <Text style={styles.cardHeading}>Google Classroom Sync 🏫</Text>
+                <Text style={styles.helperText}>
+                  Paste your Classroom calendar feed (.ics) link to import due dates.
+                </Text>
+                <TextInput
+                  style={styles.cartoonInput}
+                  placeholder="https://calendar.google.com/calendar/ical/..."
+                  placeholderTextColor="#8D847A"
+                  value={classroomLink}
+                  onChangeText={(t) => {
+                    setClassroomLink(t);
+                    setLinkSaved(false);
+                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={[styles.chunkyBtn, { backgroundColor: '#A8DADC' }]}
+                  onPress={() => {
+                    triggerHaptic();
+                    setLinkSaved(true);
+                  }}
+                >
+                  <Text style={styles.chunkyBtnText}>{linkSaved ? 'Saved ✓' : 'Save Sync Link'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Animated.ScrollView>
+
+          {/* Bottom tab bar */}
+          <View style={styles.tabBar}>
+            {TABS.map((t) => {
+              const active = tab === t.id;
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.tabBtn, active && styles.tabBtnActive]}
+                  onPress={() => {
+                    triggerHaptic();
+                    triggerTabBounce();
+                    setTab(t.id);
+                  }}
+                >
+                  <Ionicons name={t.icon} size={20} color="#1E1B18" />
+                  <Text style={styles.tabLabel}>{t.label}</Text>
+                  {t.id === 'stack' && tasks.length > 0 && (
+                    <View style={styles.tabBadge}>
+                      <Text style={styles.tabBadgeText}>{tasks.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </SafeAreaView>
+      </NotebookBackground>
     );
   }
 
@@ -520,94 +840,110 @@ export default function App() {
       : CATEGORIES[currentItem.category];
 
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: isBreak ? '#F5EEFF' : '#FFFDF7' }]}>
-        <StatusBar barStyle="dark-content" />
-        <View style={styles.timerScreenWrap}>
-          <View style={styles.rowBetween}>
-            <TouchableOpacity
-              style={styles.smallExitBtn}
-              onPress={() => {
-                setIsRunning(false);
-                setGrandmaVisible(false);
-                setScreen('planner');
-                setTab('stack');
-              }}
-            >
-              <Ionicons name="arrow-back" size={18} color="#1E1B18" />
-              <Text style={styles.smallExitText}>Edit List</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.smallExitBtn}
-              onPress={() => {
-                triggerHaptic();
-                setSoundOn(!soundOn);
-              }}
-            >
-              <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color="#1E1B18" />
-            </TouchableOpacity>
-
-            <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>Step {currentStepIndex + 1} of {queue.length}</Text>
-            </View>
-          </View>
-
-          <View style={[styles.timerMainCard, { borderColor: '#1E1B18' }]}>
-            <View style={[styles.catBadgeLarge, { backgroundColor: catTheme.color }]}>
-              <Text style={styles.catBadgeLargeText}>{catTheme.label.toUpperCase()}</Text>
-            </View>
-
-            <Text style={styles.activeTaskTitle}>{currentItem.title}</Text>
-
-            <View style={[styles.clockBox, { backgroundColor: catTheme.bgLight }]}>
-              <Text style={styles.clockDigits}>{formatClock(secondsLeft)}</Text>
-            </View>
-
-            <Text style={styles.modeSubtext}>
-              {isBreak
-                ? 'Grandma is taking a nap. Stretch, hydrate, and relax!'
-                : 'Stay locked in—Grandma is watching with her spatula...'}
-            </Text>
-
-            <View style={styles.timerControlsRow}>
+      <NotebookBackground tintColor={isBreak ? '#F7F0FF' : '#FFFDF7'}>
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar barStyle="dark-content" />
+          <View style={styles.timerScreenWrap}>
+            <View style={styles.rowBetween}>
               <TouchableOpacity
-                style={[styles.chunkyBtn, { flex: 1, backgroundColor: isRunning ? '#FFD166' : '#38B000' }]}
+                style={styles.smallExitBtn}
                 onPress={() => {
-                  triggerHaptic();
-                  setIsRunning(!isRunning);
+                  setIsRunning(false);
+                  setGrandmaVisible(false);
+                  setScreen('planner');
+                  setTab('stack');
                 }}
               >
-                <Ionicons name={isRunning ? 'pause' : 'play'} size={20} color="#1E1B18" />
-                <Text style={styles.chunkyBtnText}>{isRunning ? 'Pause' : 'Resume'}</Text>
+                <Ionicons name="arrow-back" size={18} color="#1E1B18" />
+                <Text style={styles.smallExitText}>Edit List</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.chunkyBtn, { backgroundColor: '#E0E0E0', paddingHorizontal: 16 }]}
-                onPress={handleStepComplete}
+                style={styles.smallExitBtn}
+                onPress={() => {
+                  triggerHaptic();
+                  setSoundOn(!soundOn);
+                }}
               >
-                <Ionicons name="play-skip-forward" size={20} color="#1E1B18" />
+                <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color="#1E1B18" />
               </TouchableOpacity>
+
+              <View style={styles.stepPill}>
+                <Text style={styles.stepPillText}>
+                  Step {currentStepIndex + 1} of {queue.length}
+                </Text>
+              </View>
             </View>
 
-            {!isBreak && (
-              <TouchableOpacity style={styles.peekTriggerBtn} onPress={summonGrandma}>
-                <Text style={styles.peekTriggerText}>👀 Summon Grandma Now</Text>
-              </TouchableOpacity>
+            <View style={[styles.timerMainCard, { borderColor: '#1E1B18' }]}>
+              <View style={styles.washiTape} />
+              <View style={[styles.catBadgeLarge, { backgroundColor: catTheme.color }]}>
+                <Text style={styles.catBadgeLargeText}>{catTheme.label.toUpperCase()}</Text>
+              </View>
+
+              <Animated.Text style={[styles.activeTaskTitle, { transform: [{ scale: pulseAnim }] }]}>
+                {currentItem.title}
+              </Animated.Text>
+
+              <Animated.View
+                style={[
+                  styles.clockBox,
+                  { backgroundColor: catTheme.bgLight, transform: [{ scale: pulseAnim }] },
+                ]}
+              >
+                <Text style={styles.clockDigits}>{formatClock(secondsLeft)}</Text>
+              </Animated.View>
+
+              <Text style={styles.modeSubtext}>
+                {isBreak
+                  ? breakActivity
+                  : 'Stay locked in—Granny is patrolling with her spatula... 👀'}
+              </Text>
+
+              <View style={styles.timerControlsRow}>
+                <TouchableOpacity
+                  style={[styles.chunkyBtn, { flex: 1, backgroundColor: isRunning ? '#FFD166' : '#38B000' }]}
+                  onPress={() => {
+                    triggerHaptic();
+                    setIsRunning(!isRunning);
+                  }}
+                >
+                  <Ionicons name={isRunning ? 'pause' : 'play'} size={20} color="#1E1B18" />
+                  <Text style={styles.chunkyBtnText}>{isRunning ? 'Pause' : 'Resume'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.chunkyBtn, { backgroundColor: '#E0E0E0', paddingHorizontal: 16 }]}
+                  onPress={handleStepComplete}
+                >
+                  <Ionicons name="play-skip-forward" size={20} color="#1E1B18" />
+                </TouchableOpacity>
+              </View>
+
+              {!isBreak && (
+                <TouchableOpacity style={styles.peekTriggerBtn} onPress={summonGrandma}>
+                  <Text style={styles.peekTriggerText}>👀 Summon Granny Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {currentStepIndex + 1 < queue.length && (
+              <View style={styles.upNextBox}>
+                <Text style={styles.upNextLabel}>UP NEXT:</Text>
+                <Text style={styles.upNextTitle}>
+                  {queue[currentStepIndex + 1].title} ({queue[currentStepIndex + 1].mins}m)
+                </Text>
+              </View>
             )}
           </View>
 
-          {currentStepIndex + 1 < queue.length && (
-            <View style={styles.upNextBox}>
-              <Text style={styles.upNextLabel}>UP NEXT:</Text>
-              <Text style={styles.upNextTitle}>
-                {queue[currentStepIndex + 1].title} ({queue[currentStepIndex + 1].mins}m)
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <SpatulaGrandma visible={grandmaVisible && !isBreak} quote={grandmaQuote} />
-      </SafeAreaView>
+          <SpatulaGrandma
+            visible={grandmaVisible && !isBreak}
+            quote={grandmaQuote}
+            positionConfig={grandmaPos}
+          />
+        </SafeAreaView>
+      </NotebookBackground>
     );
   }
 
@@ -615,51 +951,129 @@ export default function App() {
   // SCREEN 3: DONE
   // ==========================================
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: '#E3F8D8' }]}>
-      <View style={styles.doneWrap}>
-        <View style={styles.cartoonCard}>
-          <Text style={{ fontSize: 54, textAlign: 'center' }}>🎉👵✨</Text>
-          <Text style={[styles.appTitle, { textAlign: 'center', marginTop: 8 }]}>You Survived!</Text>
-          <Text style={[styles.helperText, { textAlign: 'center', fontSize: 15 }]}>
-            Every assignment in your priority queue is finished. Grandma put the spatula back in the drawer.
-          </Text>
-          <TouchableOpacity
-            style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 14 }]}
-            onPress={() => {
-              setScreen('planner');
-              setTab('add');
-            }}
-          >
-            <Text style={styles.chunkyBtnText}>Plan Next Study Stack</Text>
-          </TouchableOpacity>
+    <NotebookBackground tintColor="#E8FCE0">
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.doneWrap}>
+          <View style={styles.cartoonCard}>
+            <View style={styles.washiTape} />
+            <Text style={{ fontSize: 60, textAlign: 'center' }}>🎉👵✨</Text>
+            <BouncyTitle text="You Survived!" style={[styles.appTitle, { textAlign: 'center', marginTop: 4 }]} />
+            <Text style={[styles.helperText, { textAlign: 'center', fontSize: 16 }]}>
+              Every assignment in your study stack is finished! Granny put the spatula back in the kitchen drawer.
+            </Text>
+            <TouchableOpacity
+              style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 14 }]}
+              onPress={() => {
+                setTasks([]);
+                setScreen('planner');
+                setTab('add');
+              }}
+            >
+              <Text style={styles.chunkyBtnText}>Start a Fresh Page 📓</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </NotebookBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFDF7' },
-  scrollContent: { padding: 20, paddingBottom: 24, gap: 16 },
+  notebookBase: { flex: 1 },
+  notebookLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1.5,
+    backgroundColor: '#C5DCF0',
+  },
+  marginLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 34,
+    width: 2,
+    backgroundColor: '#F4A2A8',
+  },
+  binderHole: {
+    position: 'absolute',
+    left: 10,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E6E1D6',
+    borderWidth: 1.5,
+    borderColor: '#C9C2B4',
+  },
+  safeArea: { flex: 1, backgroundColor: 'transparent' },
+  scrollContent: { padding: 20, paddingLeft: 44, paddingBottom: 28, gap: 16 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingLeft: 44,
+    paddingRight: 20,
     paddingTop: Platform.OS === 'android' ? 36 : 12,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   stickerBadge: {
     backgroundColor: '#FFD166',
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: '#1E1B18',
-    transform: [{ rotate: '-2deg' }],
+    transform: [{ rotate: '-3deg' }],
+    shadowColor: '#1E1B18',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
-  stickerText: { fontSize: 10, fontWeight: '900', color: '#1E1B18', letterSpacing: 0.8 },
-  appTitle: { fontSize: 32, fontWeight: '900', color: '#1E1B18', letterSpacing: -1 },
+  stickerText: { fontFamily: PLAYFUL_FONT, fontSize: 11, fontWeight: '900', color: '#1E1B18', letterSpacing: 0.6 },
+  appTitle: { fontFamily: PLAYFUL_FONT, fontSize: 33, fontWeight: '900', color: '#1E1B18', letterSpacing: -0.5 },
+
+  washiTape: {
+    position: 'absolute',
+    top: -12,
+    alignSelf: 'center',
+    width: 74,
+    height: 20,
+    backgroundColor: 'rgba(255, 183, 3, 0.75)',
+    borderWidth: 1.5,
+    borderColor: '#1E1B18',
+    transform: [{ rotate: '-2deg' }],
+    zIndex: 10,
+  },
+
+  // Tutorial Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 27, 24, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  tutorialCard: {
+    width: '100%',
+    backgroundColor: '#FFFDF7',
+    borderRadius: 26,
+    padding: 24,
+    paddingTop: 30,
+    borderWidth: 3.5,
+    borderColor: '#1E1B18',
+    shadowColor: '#1E1B18',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    alignItems: 'center',
+    gap: 12,
+  },
+  tutorialEmoji: { fontSize: 54 },
+  tutorialTitle: { fontFamily: PLAYFUL_FONT, fontSize: 25, fontWeight: '900', color: '#1E1B18', textAlign: 'center' },
+  tutorialBody: { fontFamily: PLAYFUL_FONT, fontSize: 16, fontWeight: '600', color: '#4A443E', textAlign: 'center', lineHeight: 22 },
+  dotsRow: { flexDirection: 'row', gap: 6, marginVertical: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D6CFC4' },
+  tutorialBtnRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
 
   // Tab bar
   tabBar: {
@@ -677,8 +1091,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 11,
+    borderRadius: 16,
     borderWidth: 2.5,
     borderColor: '#1E1B18',
     backgroundColor: '#FFFFFF',
@@ -689,8 +1103,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    transform: [{ translateY: -2 }],
   },
-  tabLabel: { fontSize: 14, fontWeight: '900', color: '#1E1B18' },
+  tabLabel: { fontFamily: PLAYFUL_FONT, fontSize: 15, fontWeight: '900', color: '#1E1B18' },
   tabBadge: {
     backgroundColor: '#FF5A5F',
     minWidth: 20,
@@ -702,27 +1117,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  tabBadgeText: { fontSize: 11, fontWeight: '900', color: '#FFF' },
+  tabBadgeText: { fontFamily: PLAYFUL_FONT, fontSize: 11, fontWeight: '900', color: '#FFF' },
 
   cartoonCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
-    padding: 18,
+    padding: 20,
+    paddingTop: 24,
     borderWidth: 3,
     borderColor: '#1E1B18',
     shadowColor: '#1E1B18',
-    shadowOffset: { width: 4, height: 4 },
+    shadowOffset: { width: 5, height: 5 },
     shadowOpacity: 1,
     shadowRadius: 0,
     gap: 12,
   },
-  cardHeading: { fontSize: 17, fontWeight: '900', color: '#1E1B18' },
-  helperText: { fontSize: 13, color: '#5C554E', fontWeight: '600', lineHeight: 19 },
+  cardHeading: { fontFamily: PLAYFUL_FONT, fontSize: 19, fontWeight: '900', color: '#1E1B18' },
+  subLabel: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '700', color: '#5C554E' },
+  helperText: { fontFamily: PLAYFUL_FONT, fontSize: 14, color: '#5C554E', fontWeight: '600', lineHeight: 20 },
   cartoonInput: {
+    fontFamily: PLAYFUL_FONT,
     backgroundColor: '#FAF6EC',
     borderRadius: 14,
     padding: 14,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1E1B18',
     borderWidth: 2.5,
@@ -735,7 +1153,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#1E1B18',
   },
@@ -744,8 +1162,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 2, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 0,
+    transform: [{ rotate: '-1.5deg' }],
   },
-  catPillText: { fontSize: 12, fontWeight: '800', color: '#1E1B18' },
+  catPillText: { fontFamily: PLAYFUL_FONT, fontSize: 13, fontWeight: '800', color: '#1E1B18' },
   chunkyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -761,11 +1180,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 0,
   },
-  chunkyBtnText: { fontSize: 15, fontWeight: '900', color: '#1E1B18' },
+  chunkyBtnText: { fontFamily: PLAYFUL_FONT, fontSize: 16, fontWeight: '900', color: '#1E1B18' },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 20, fontWeight: '900', color: '#1E1B18' },
+  sectionTitle: { fontFamily: PLAYFUL_FONT, fontSize: 22, fontWeight: '900', color: '#1E1B18' },
   totalTimeBadge: {
-    fontSize: 12,
+    fontFamily: PLAYFUL_FONT,
+    fontSize: 13,
     fontWeight: '800',
     color: '#1E1B18',
     backgroundColor: '#E3F8D8',
@@ -785,42 +1205,42 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: '#1E1B18',
     shadowColor: '#1E1B18',
-    shadowOffset: { width: 3, height: 3 },
+    shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 0,
   },
   rankCol: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   arrowBtn: { padding: 2 },
-  rankNumber: { fontSize: 14, fontWeight: '900', color: '#1E1B18' },
+  rankNumber: { fontFamily: PLAYFUL_FONT, fontSize: 15, fontWeight: '900', color: '#1E1B18' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   miniTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1.5, borderColor: '#1E1B18' },
-  miniTagText: { fontSize: 10, fontWeight: '900' },
-  taskTitle: { fontSize: 16, fontWeight: '800', color: '#1E1B18' },
+  miniTagText: { fontFamily: PLAYFUL_FONT, fontSize: 11, fontWeight: '900' },
+  taskTitle: { fontFamily: PLAYFUL_FONT, fontSize: 17, fontWeight: '800', color: '#1E1B18' },
   timeAdjustRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   timeStepBtn: {
     backgroundColor: '#FAF6EC',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#1E1B18',
   },
-  timeStepText: { fontSize: 12, fontWeight: '900', color: '#1E1B18' },
+  timeStepText: { fontFamily: PLAYFUL_FONT, fontSize: 13, fontWeight: '900', color: '#1E1B18' },
   timeReadout: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#FFD166',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#1E1B18',
   },
-  timeReadoutText: { fontSize: 12, fontWeight: '900', color: '#1E1B18' },
+  timeReadoutText: { fontFamily: PLAYFUL_FONT, fontSize: 13, fontWeight: '900', color: '#1E1B18' },
 
   // Timer screen
-  timerScreenWrap: { flex: 1, padding: 20, justifyContent: 'space-between' },
+  timerScreenWrap: { flex: 1, padding: 20, paddingLeft: 44, justifyContent: 'space-between' },
   smallExitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -831,8 +1251,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#1E1B18',
+    shadowColor: '#1E1B18',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
   },
-  smallExitText: { fontSize: 13, fontWeight: '800', color: '#1E1B18' },
+  smallExitText: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '800', color: '#1E1B18' },
   stepPill: {
     backgroundColor: '#FFD166',
     paddingHorizontal: 12,
@@ -841,11 +1265,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1E1B18',
   },
-  stepPillText: { fontSize: 13, fontWeight: '900', color: '#1E1B18' },
+  stepPillText: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '900', color: '#1E1B18' },
   timerMainCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 28,
     padding: 24,
+    paddingTop: 28,
     alignItems: 'center',
     borderWidth: 3.5,
     borderColor: '#1E1B18',
@@ -862,21 +1287,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1E1B18',
   },
-  catBadgeLargeText: { fontSize: 12, fontWeight: '900', color: '#FFF', letterSpacing: 1 },
-  activeTaskTitle: { fontSize: 22, fontWeight: '900', color: '#1E1B18', textAlign: 'center' },
+  catBadgeLargeText: { fontFamily: PLAYFUL_FONT, fontSize: 13, fontWeight: '900', color: '#FFF', letterSpacing: 1 },
+  activeTaskTitle: { fontFamily: PLAYFUL_FONT, fontSize: 23, fontWeight: '900', color: '#1E1B18', textAlign: 'center' },
   clockBox: {
     width: '100%',
-    paddingVertical: 22,
+    paddingVertical: 18,
     borderRadius: 22,
     borderWidth: 3,
     borderColor: '#1E1B18',
     alignItems: 'center',
   },
-  clockDigits: { fontSize: 64, fontWeight: '900', color: '#1E1B18', letterSpacing: -2 },
-  modeSubtext: { fontSize: 13, fontWeight: '700', color: '#5C554E', textAlign: 'center' },
+  clockDigits: { fontFamily: PLAYFUL_FONT, fontSize: 64, fontWeight: '900', color: '#1E1B18' },
+  modeSubtext: { fontFamily: PLAYFUL_FONT, fontSize: 15, fontWeight: '700', color: '#5C554E', textAlign: 'center' },
   timerControlsRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 4 },
   peekTriggerBtn: { marginTop: 4, paddingVertical: 6, paddingHorizontal: 12 },
-  peekTriggerText: { fontSize: 12, fontWeight: '800', color: '#FF5A5F', textDecorationLine: 'underline' },
+  peekTriggerText: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '800', color: '#FF5A5F', textDecorationLine: 'underline' },
   upNextBox: {
     backgroundColor: '#FFFFFF',
     padding: 14,
@@ -886,75 +1311,90 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  upNextLabel: { fontSize: 11, fontWeight: '900', color: '#8D847A' },
-  upNextTitle: { fontSize: 13, fontWeight: '800', color: '#1E1B18', flex: 1 },
-  doneWrap: { flex: 1, justifyContent: 'center', padding: 24 },
-
-  // Granny (container is scaled up via GRANDMA_SCALE)
-  grandmaOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingBottom: 60,
-    zIndex: 50,
-  },
-  speechBubble: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 18,
-    borderWidth: 3,
-    borderColor: '#1E1B18',
-    marginBottom: 80,
     shadowColor: '#1E1B18',
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
-    maxWidth: '86%',
   },
-  speechText: { fontSize: 16, fontWeight: '900', color: '#1E1B18', textAlign: 'center' },
+  upNextLabel: { fontFamily: PLAYFUL_FONT, fontSize: 12, fontWeight: '900', color: '#8D847A' },
+  upNextTitle: { fontFamily: PLAYFUL_FONT, fontSize: 14, fontWeight: '800', color: '#1E1B18', flex: 1 },
+  doneWrap: { flex: 1, justifyContent: 'center', padding: 24, paddingLeft: 44 },
+
+  // ==========================================
+  // GRANDMA & SPEECH BUBBLE STYLES
+  // ==========================================
+  grandmaOverlay: {
+    position: 'absolute',
+    bottom: -15,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  speechBubble: {
+    backgroundColor: '#FFFDF7',
+    borderWidth: 3,
+    borderColor: '#1E1B18',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 44,
+    maxWidth: 250,
+    shadowColor: '#1E1B18',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    zIndex: 20,
+  },
+  speechText: {
+    fontFamily: PLAYFUL_FONT,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E1B18',
+    textAlign: 'center',
+  },
   speechTail: {
     position: 'absolute',
-    bottom: -9,
+    bottom: -10,
     alignSelf: 'center',
-    width: 14,
-    height: 14,
-    backgroundColor: '#FFFFFF',
+    width: 16,
+    height: 16,
+    backgroundColor: '#FFFDF7',
     borderRightWidth: 3,
     borderBottomWidth: 3,
     borderColor: '#1E1B18',
     transform: [{ rotate: '45deg' }],
   },
-  grandmaContainer: { width: 170, height: 145, alignItems: 'center' },
+  grandmaContainer: {
+    alignItems: 'center',
+    width: 120,
+    height: 150,
+  },
   hairBun: {
     width: 44,
     height: 36,
-    borderRadius: 20,
-    backgroundColor: '#E5E7EB',
-    borderWidth: 3,
+    borderRadius: 22,
+    backgroundColor: '#D6D2CE',
+    borderWidth: 2.5,
     borderColor: '#1E1B18',
     marginBottom: -12,
   },
   hairBase: {
-    position: 'absolute',
-    top: 22,
-    width: 106,
-    height: 76,
-    borderRadius: 48,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 3,
+    width: 84,
+    height: 46,
+    borderTopLeftRadius: 42,
+    borderTopRightRadius: 42,
+    backgroundColor: '#E5E1DD',
+    borderWidth: 2.5,
     borderColor: '#1E1B18',
+    marginBottom: -30,
   },
   grandmaFace: {
-    marginTop: 10,
-    width: 84,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#FCD5B5',
-    borderWidth: 3,
+    width: 72,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FAD2B8',
+    borderWidth: 2.5,
     borderColor: '#1E1B18',
     alignItems: 'center',
     justifyContent: 'center',
@@ -964,66 +1404,80 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 14,
-    width: 22,
-    height: 4,
-    backgroundColor: '#4B5563',
+    width: 16,
+    height: 3.5,
+    backgroundColor: '#6E6A67',
     borderRadius: 2,
-    transform: [{ rotate: '18deg' }],
+    transform: [{ rotate: '14deg' }],
   },
   browRight: {
     position: 'absolute',
     top: 16,
     right: 14,
-    width: 22,
-    height: 4,
-    backgroundColor: '#4B5563',
+    width: 16,
+    height: 3.5,
+    backgroundColor: '#6E6A67',
     borderRadius: 2,
-    transform: [{ rotate: '-18deg' }],
+    transform: [{ rotate: '-14deg' }],
   },
-  glassesRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  glassesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   glassLens: {
-    width: 26,
+    width: 22,
     height: 20,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 2.5,
     borderColor: '#1E1B18',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  glassBridge: { width: 6, height: 3, backgroundColor: '#1E1B18' },
-  pupil: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#1E1B18' },
+  pupil: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#1E1B18',
+  },
+  glassBridge: {
+    width: 6,
+    height: 2.5,
+    backgroundColor: '#1E1B18',
+  },
   grandmaMouth: {
-    marginTop: 10,
-    width: 22,
-    height: 8,
-    borderTopWidth: 3,
+    width: 18,
+    height: 5,
+    borderTopWidth: 2.5,
     borderColor: '#1E1B18',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderRadius: 8,
+    marginTop: 8,
   },
   cheek: {
     position: 'absolute',
-    bottom: 18,
+    bottom: 16,
     width: 10,
     height: 6,
-    borderRadius: 4,
-    backgroundColor: '#F87171',
-    opacity: 0.6,
+    borderRadius: 5,
+    backgroundColor: '#F4978E',
   },
   cardigan: {
-    marginTop: -6,
-    width: 120,
-    height: 55,
+    width: 96,
+    height: 58,
     borderTopLeftRadius: 34,
     borderTopRightRadius: 34,
     backgroundColor: '#9B5DE5',
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: '#1E1B18',
+    marginTop: -6,
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
   },
-  pearlsRow: { flexDirection: 'row', gap: 4 },
+  pearlsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
   pearl: {
     width: 9,
     height: 9,
@@ -1034,37 +1488,43 @@ const styles = StyleSheet.create({
   },
   spatulaWrap: {
     position: 'absolute',
-    right: 4,
-    bottom: 10,
+    right: -12,
+    bottom: 18,
     alignItems: 'center',
-    zIndex: 10,
+    zIndex: 5,
   },
   spatulaHead: {
-    width: 28,
-    height: 34,
+    width: 26,
+    height: 30,
     borderRadius: 6,
-    backgroundColor: '#CBD5E1',
-    borderWidth: 2.5,
+    backgroundColor: '#B8C0C8',
+    borderWidth: 2,
     borderColor: '#1E1B18',
     justifyContent: 'space-evenly',
     alignItems: 'center',
+    paddingVertical: 4,
   },
-  spatulaSlot: { width: 16, height: 3, backgroundColor: '#1E1B18', borderRadius: 2 },
+  spatulaSlot: {
+    width: 14,
+    height: 3,
+    backgroundColor: '#1E1B18',
+    borderRadius: 2,
+  },
   spatulaHandle: {
-    width: 8,
-    height: 36,
-    backgroundColor: '#B45309',
+    width: 7,
+    height: 26,
+    backgroundColor: '#D4A373',
     borderWidth: 2,
     borderColor: '#1E1B18',
     marginTop: -2,
   },
   grandmaHand: {
-    width: 22,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FCD5B5',
-    borderWidth: 2.5,
+    width: 18,
+    height: 16,
+    borderRadius: 9,
+    backgroundColor: '#FAD2B8',
+    borderWidth: 2,
     borderColor: '#1E1B18',
-    marginTop: -18,
+    marginTop: -12,
   },
 });
