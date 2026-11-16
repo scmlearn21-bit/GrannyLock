@@ -15,15 +15,19 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import * as Notifications from 'expo-notifications';
+let Notifications = null;
+try {
+  Notifications = require('expo-notifications');
+} catch (e) {}
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-Notifications.setNotificationHandler({
+Notifications?.setNotificationHandler?.({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -308,9 +312,8 @@ export default function App() {
 
   useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
 
-  const SOUND_BASE = 'https://raw.githubusercontent.com/scmlearn21-bit/GrannyLock/main/assets/';
-  const appearPlayer = useAudioPlayer({ uri: SOUND_BASE + 'granny-appear.wav' });
-  const tapPlayer = useAudioPlayer({ uri: SOUND_BASE + 'spatula-tap.wav' });
+  const appearPlayer = useAudioPlayer(require('./assets/granny-appear.wav'));
+  const tapPlayer = useAudioPlayer(require('./assets/spatula-tap.wav'));
 
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
@@ -357,7 +360,7 @@ export default function App() {
   };
 
   const playSound = (player) => {
-    if (!soundRef.current) return;
+    if (!soundRef.current || !player) return;
     try {
       player.seekTo(0);
       player.play();
@@ -477,7 +480,7 @@ export default function App() {
   const handleStepComplete = async () => {
     setGrandmaVisible(false);
     const nextIdx = currentStepIndex + 1;
-    await Notifications.scheduleNotificationAsync({
+    await Notifications?.scheduleNotificationAsync?.({
       content: {
         title: nextIdx < queue.length ? 'Timer Up! Next Step Ready' : 'All Done! Study Session Complete',
         body: nextIdx < queue.length ? `Up next: ${queue[nextIdx].title}` : 'Grandma is proud. Put the spatula away!',
