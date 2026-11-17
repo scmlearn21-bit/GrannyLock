@@ -15,13 +15,11 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { Ionicons } from '@expo/vector-icons';
-
 let Notifications = null;
 try {
   Notifications = require('expo-notifications');
 } catch (e) {}
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -313,11 +311,10 @@ export default function App() {
 
   useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
 
-  const appearPlayer = useAudioPlayer(require('./assets/granny-appear.wav'));
-  const tapPlayer = useAudioPlayer(require('./assets/spatula-tap.wav'));
+  const appearPlayer = null;
+  const tapPlayer = null;
 
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
       if (window.localStorage.getItem('grannylock_tutorial_seen') === 'true') {
         hasSeenTutorialGlobal = true;
