@@ -15,6 +15,11 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+let AsyncStorage = null;
+try {
+  AsyncStorage = require('@react-native-async-storage/async-storage').default;
+} catch (e) {}
+
 let Notifications = null;
 try {
   Notifications = require('expo-notifications');
@@ -84,7 +89,7 @@ const TUTORIAL_STEPS = [
   {
     emoji: '📚',
     title: '1. Build Your Stack',
-    body: 'Use the Add tab to jot down tests, projects, or homework. Adjust minutes and rank them in the Stack tab!',
+    body: 'Use the Stack tab to jot down tests, projects, or homework. Adjust minutes and rank them right there!',
   },
   {
     emoji: '🍳',
@@ -98,8 +103,40 @@ const TUTORIAL_STEPS = [
   },
 ];
 
+const HISTORY_KEY = 'grannylock_history';
+const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+const dateKey = (d) => {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + day;
+};
+
+const pickGrannyStatus = (sessionsToday, streak, hour, tick) => {
+  let pool;
+  if (hour >= 22 || hour < 6) {
+    pool = [{ emoji: '😴', text: 'Granny is napping... shh, go to bed too.', bg: '#E0ECFF' }];
+  } else if (sessionsToday === 0) {
+    pool = [
+      { emoji: '👀', text: 'Granny is on patrol. Nobody has studied yet today...', bg: '#FFE5E6' },
+      { emoji: '🥄', text: 'Granny is tapping her spatula, waiting for you.', bg: '#FFE5E6' },
+    ];
+  } else if (streak >= 3) {
+    pool = [
+      { emoji: '🍪', text: 'Granny is baking cookies for your streak!', bg: '#FFF3D1' },
+      { emoji: '🧶', text: 'Granny is knitting you a victory scarf.', bg: '#F3E8FF' },
+    ];
+  } else {
+    pool = [
+      { emoji: '🌷', text: 'Granny is watering her petunias. Nice work today!', bg: '#E3F8D8' },
+      { emoji: '🫖', text: 'Granny is sipping tea, proud of you.', bg: '#FFF3D1' },
+    ];
+  }
+  return pool[tick % pool.length];
+};
+
 const TABS = [
-  { id: 'add', label: 'Add', icon: 'add-circle' },
+  { id: 'home', label: 'Home', icon: 'home' },
   { id: 'stack', label: 'Stack', icon: 'list' },
   { id: 'sync', label: 'Sync', icon: 'school' },
 ];
@@ -290,7 +327,11 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(!hasSeenTutorialGlobal);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [screen, setScreen] = useState('planner');
-  const [tab, setTab] = useState('add');
+  const [tab, setTab] = useState('home');
+  const [history, setHistory] = useState({});
+  const historyRef = useRef({});
+  const [statusTick, setStatusTick] = useState(0);
+  const grannyBob = useRef(new Animated.Value(0)).current;
   const [titleInput, setTitleInput] = useState('');
   const [selectedCat, setSelectedCat] = useState('test');
   const [classroomLink, setClassroomLink] = useState('');
@@ -362,6 +403,39 @@ export default function App() {
     try {
       player.seekTo(0);
       player.play();
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage?.getItem(HISTORY_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          historyRef.current = parsed;
+          setHistory(parsed);
+        }
+      } catch (e) {}
+    })();
+    const tickTimer = setInterval(() => setStatusTick((n) => n + 1), 12000);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(grannyBob, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(grannyBob, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    ).start();
+    return () => clearInterval(tickTimer);
+  }, []);
+
+  const recordSession = (mins) => {
+    const key = dateKey(new Date());
+    const prev = historyRef.current;
+    const cur = prev[key] || { sessions: 0, mins: 0 };
+    const next = { ...prev, [key]: { sessions: cur.sessions + 1, mins: cur.mins + mins } };
+    historyRef.current = next;
+    setHistory(next);
+    try {
+      Promise.resolve(AsyncStorage?.setItem(HISTORY_KEY, JSON.stringify(next))).catch(() => {});
     } catch (e) {}
   };
 
@@ -477,6 +551,8 @@ export default function App() {
 
   const handleStepComplete = async () => {
     setGrandmaVisible(false);
+    const finished = queue[currentStepIndex];
+    if (finished && finished.type === 'focus') recordSession(finished.mins);
     const nextIdx = currentStepIndex + 1;
     await Notifications?.scheduleNotificationAsync?.({
       content: {
@@ -564,6 +640,25 @@ export default function App() {
     );
   };
 
+  const nowDate = new Date();
+  const weekDays = [0, 1, 2, 3, 4, 5, 6].map((i) => {
+    const d = new Date();
+    d.setDate(nowDate.getDate() - (6 - i));
+    const k = dateKey(d);
+    return { key: k, label: DAY_LETTERS[d.getDay()], data: history[k] || { sessions: 0, mins: 0 }, isToday: i === 6 };
+  });
+  const sessionsWeek = weekDays.reduce((n, d) => n + d.data.sessions, 0);
+  const minsWeek = weekDays.reduce((n, d) => n + d.data.mins, 0);
+  const sessionsToday = weekDays[6].data.sessions;
+  let streak = 0;
+  const cursor = new Date();
+  if (!(history[dateKey(cursor)] && history[dateKey(cursor)].sessions > 0)) cursor.setDate(cursor.getDate() - 1);
+  while (history[dateKey(cursor)] && history[dateKey(cursor)].sessions > 0) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  const grannyStatus = pickGrannyStatus(sessionsToday, streak, nowDate.getHours(), statusTick);
+
   if (screen === 'planner') {
     return (
       <NotebookBackground>
@@ -584,50 +679,110 @@ export default function App() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {tab === 'add' && (
-              <View style={styles.cartoonCard}>
-                <View style={styles.washiTape} />
-                <Text style={styles.cardHeading}>Jot down an assignment:</Text>
-                <TextInput
-                  style={styles.cartoonInput}
-                  placeholder="e.g., AP Bio Quiz, English Essay..."
-                  placeholderTextColor="#8D847A"
-                  value={titleInput}
-                  onChangeText={setTitleInput}
-                />
-                <Text style={styles.subLabel}>Pick a sticker label:</Text>
-                <View style={styles.catGrid}>
-                  {Object.values(CATEGORIES).map((cat) => {
-                    const active = selectedCat === cat.id;
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.catPill,
-                          { backgroundColor: active ? cat.color : cat.bgLight },
-                          active && styles.catPillActive,
-                        ]}
-                        onPress={() => {
-                          triggerHaptic();
-                          setSelectedCat(cat.id);
-                        }}
-                      >
-                        <Ionicons name={cat.icon} size={16} color={active ? '#FFF' : '#1E1B18'} />
-                        <Text style={[styles.catPillText, active && { color: '#FFF' }]}>
-                          {cat.label} ({cat.defaultMins}m)
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+            {tab === 'home' && (
+              <>
+                <View style={styles.cartoonCard}>
+                  <View style={styles.washiTape} />
+                  <Text style={[styles.cardHeading, { textAlign: 'center' }]}>Granny's Status</Text>
+                  <Animated.View
+                    style={[
+                      styles.grannyAvatarWrap,
+                      { backgroundColor: grannyStatus.bg },
+                      { transform: [{ translateY: grannyBob.interpolate({ inputRange: [0, 1], outputRange: [0, -6] }) }] },
+                    ]}
+                  >
+                    <Text style={styles.grannyEmoji}>👵</Text>
+                  </Animated.View>
+                  <View style={[styles.statusPill, { backgroundColor: grannyStatus.bg }]}>
+                    <Text style={{ fontSize: 20 }}>{grannyStatus.emoji}</Text>
+                    <Text style={styles.statusText}>{grannyStatus.text}</Text>
+                  </View>
                 </View>
-                <TouchableOpacity style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 4 }]} onPress={addTask}>
-                  <Ionicons name="add-circle" size={22} color="#1E1B18" />
-                  <Text style={styles.chunkyBtnText}>Stick Into My Stack!</Text>
-                </TouchableOpacity>
-              </View>
+                <View style={styles.cartoonCard}>
+                  <View style={styles.washiTape} />
+                  <Text style={styles.cardHeading}>Your Streak</Text>
+                  <View style={styles.statRow}>
+                    <View style={[styles.statBox, { backgroundColor: '#FFE5E6' }]}>
+                      <Text style={styles.statNum}>{streak} 🔥</Text>
+                      <Text style={styles.statLabel}>{streak === 1 ? 'DAY STREAK' : 'DAY STREAK'}</Text>
+                    </View>
+                    <View style={[styles.statBox, { backgroundColor: '#E3F8D8' }]}>
+                      <Text style={styles.statNum}>{sessionsWeek}</Text>
+                      <Text style={styles.statLabel}>SESSIONS / WEEK</Text>
+                    </View>
+                    <View style={[styles.statBox, { backgroundColor: '#E0ECFF' }]}>
+                      <Text style={styles.statNum}>{minsWeek}</Text>
+                      <Text style={styles.statLabel}>FOCUS MINS</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.subLabel}>Last 7 days:</Text>
+                  <View style={styles.weekRow}>
+                    {weekDays.map((d) => (
+                      <View key={d.key} style={styles.dayCol}>
+                        <View
+                          style={[
+                            styles.dayDot,
+                            d.data.sessions > 0 && { backgroundColor: '#38B000' },
+                            d.isToday && { borderColor: '#FF5A5F' },
+                          ]}
+                        >
+                          {d.data.sessions > 0 && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                        </View>
+                        <Text style={styles.dayLabel}>{d.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.helperText}>
+                    {sessionsToday > 0
+                      ? 'Nice! You locked in ' + sessionsToday + (sessionsToday === 1 ? ' session' : ' sessions') + ' today.'
+                      : 'Finish a focus timer to start or keep your streak!'}
+                  </Text>
+                </View>
+              </>
             )}
             {tab === 'stack' && (
               <>
+                <View style={styles.cartoonCard}>
+                  <View style={styles.washiTape} />
+                  <Text style={styles.cardHeading}>Jot down an assignment:</Text>
+                  <TextInput
+                    style={styles.cartoonInput}
+                    placeholder="e.g., AP Bio Quiz, English Essay..."
+                    placeholderTextColor="#8D847A"
+                    value={titleInput}
+                    onChangeText={setTitleInput}
+                  />
+                  <Text style={styles.subLabel}>Pick a sticker label:</Text>
+                  <View style={styles.catGrid}>
+                    {Object.values(CATEGORIES).map((cat) => {
+                      const active = selectedCat === cat.id;
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[
+                            styles.catPill,
+                            { backgroundColor: active ? cat.color : cat.bgLight },
+                            active && styles.catPillActive,
+                          ]}
+                          onPress={() => {
+                            triggerHaptic();
+                            setSelectedCat(cat.id);
+                          }}
+                        >
+                          <Ionicons name={cat.icon} size={16} color={active ? '#FFF' : '#1E1B18'} />
+                          <Text style={[styles.catPillText, active && { color: '#FFF' }]}>
+                            {cat.label} ({cat.defaultMins}m)
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TouchableOpacity style={[styles.chunkyBtn, { backgroundColor: '#FFD166', marginTop: 4 }]} onPress={addTask}>
+                    <Ionicons name="add-circle" size={22} color="#1E1B18" />
+                    <Text style={styles.chunkyBtnText}>Stick Into My Stack!</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <View style={styles.sectionHeaderRow}>
                   <Text style={styles.sectionTitle}>Your Study Stack</Text>
                   <Text style={styles.totalTimeBadge}>{totalFocusMins}m + breaks</Text>
@@ -637,7 +792,7 @@ export default function App() {
                     <View style={styles.washiTape} />
                     <Text style={[styles.cardHeading, { textAlign: 'center' }]}>Blank Page!</Text>
                     <Text style={[styles.helperText, { textAlign: 'center' }]}>
-                      Your stack is empty. Tap the Add tab below to write down your first assignment!
+                      Your stack is empty. Jot down your first assignment above!
                     </Text>
                   </View>
                 )}
@@ -884,7 +1039,7 @@ export default function App() {
               onPress={() => {
                 setTasks([]);
                 setScreen('planner');
-                setTab('add');
+                setTab('stack');
               }}
             >
               <Text style={styles.chunkyBtnText}>Start a Fresh Page</Text>
@@ -897,6 +1052,30 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  grannyAvatarWrap: {
+    width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#1E1B18',
+    alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginTop: 4,
+  },
+  grannyEmoji: { fontSize: 54 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 2.5, borderColor: '#1E1B18',
+    borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14, marginTop: 14, alignSelf: 'center',
+  },
+  statusText: { fontSize: 14, fontWeight: '800', color: '#1E1B18', fontFamily: PLAYFUL_FONT, flexShrink: 1, textAlign: 'center' },
+  statRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  statBox: {
+    flex: 1, borderWidth: 2.5, borderColor: '#1E1B18', borderRadius: 14, paddingVertical: 12,
+    paddingHorizontal: 4, alignItems: 'center',
+  },
+  statNum: { fontSize: 24, fontWeight: '900', color: '#1E1B18', fontFamily: PLAYFUL_FONT },
+  statLabel: { fontSize: 9, fontWeight: '800', color: '#1E1B18', marginTop: 2, textAlign: 'center' },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 8 },
+  dayCol: { alignItems: 'center', gap: 4 },
+  dayDot: {
+    width: 36, height: 36, borderRadius: 18, borderWidth: 2.5, borderColor: '#1E1B18',
+    backgroundColor: '#FAF6EC', alignItems: 'center', justifyContent: 'center',
+  },
+  dayLabel: { fontSize: 12, fontWeight: '800', color: '#1E1B18', fontFamily: PLAYFUL_FONT },
   notebookBase: { flex: 1 },
   notebookLine: {
     position: 'absolute',
