@@ -7,13 +7,10 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "*",
-    "react": "*",
-    "react-native": "*",
-    "expo-haptics": "*",
-    "expo-notifications": "*",
-    "@expo/vector-icons": "*",
-    "@react-native-async-storage/async-storage": "*"
+    "expo-audio": "~58.0.7",
+    "expo-haptics": "~58.0.5",
+    "expo-notifications": "~58.1.7",
+    "@expo/vector-icons": "^15.0.2"
   },
   "private": true
 }
