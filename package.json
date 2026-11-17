@@ -10,7 +10,6 @@
     "expo": "*",
     "react": "*",
     "react-native": "*",
-    "expo-audio": "*",
     "expo-haptics": "*",
     "expo-notifications": "*",
     "@expo/vector-icons": "*"
