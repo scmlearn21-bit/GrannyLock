@@ -15,12 +15,13 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { Ionicons } from '@expo/vector-icons';
+
 let Notifications = null;
 try {
   Notifications = require('expo-notifications');
 } catch (e) {}
-import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
-import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
